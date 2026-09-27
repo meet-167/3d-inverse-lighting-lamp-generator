@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NightLight STL viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin:0; height:100%; background:#1b1b1e; font-family: system-ui, sans-serif; }
+  #drop {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#aaa; font-size:15px; text-align:center; pointer-events:none; padding:20px;
+  }
+  #drop.hidden { display:none; }
+  #bar {
+    position:absolute; top:0; left:0; right:0; padding:10px 14px; display:flex; gap:10px;
+    align-items:center; background:rgba(0,0,0,0.35); color:#ddd; font-size:13px; z-index:2;
+  }
+  #bar input[type=file] { color:#ddd; }
+  #bar label { display:flex; align-items:center; gap:6px; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <label>Load STL: <input type="file" id="file" accept=".stl"></label>
+    <label><input type="checkbox" id="wire"> wireframe</label>
+    <span id="stats" style="margin-left:auto;color:#888;"></span>
+  </div>
+  <div id="drop">Drag a .stl file here, or use the picker above<br>(shade.stl / cover.stl / bulb.stl from the generator)</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/loaders/STLLoader.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/controls/OrbitControls.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1b1b1e);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 5000);
+    camera.position.set(120, 120, 160);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(1, 2, 1);
+    scene.add(dir);
+    const grid = new THREE.GridHelper(300, 30, 0x444444, 0x2a2a2a);
+    scene.add(grid);
+
+    let currentMesh = null;
+    const loader = new THREE.STLLoader();
+
+    function loadGeometry(geometry) {
+      if (currentMesh) { scene.remove(currentMesh); currentMesh.geometry.dispose(); }
+      geometry.computeVertexNormals();
+      geometry.center();
+      const material = new THREE.MeshStandardMaterial({ color: 0xd9c98a, metalness: 0.05, roughness: 0.7, side: THREE.DoubleSide });
+      currentMesh = new THREE.Mesh(geometry, material);
+      currentMesh.rotation.x = -Math.PI / 2; // Z-up model -> Three's Y-up view
+      scene.add(currentMesh);
+
+      geometry.computeBoundingSphere();
+      const r = geometry.boundingSphere.radius || 50;
+      camera.position.set(r * 1.6, r * 1.2, r * 1.8);
+      controls.target.set(0, 0, 0);
+      controls.update();
+
+      document.getElementById('stats').textContent =
+        `${geometry.attributes.position.count.toLocaleString()} vertices`;
+      document.getElementById('drop').classList.add('hidden');
+    }
+
+    function loadFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => loadGeometry(loader.parse(e.target.result));
+      reader.readAsArrayBuffer(file);
+    }
+
+    document.getElementById('file').addEventListener('change', (e) => {
+      if (e.target.files[0]) loadFile(e.target.files[0]);
+    });
+    document.getElementById('wire').addEventListener('change', (e) => {
+      if (currentMesh) currentMesh.material.wireframe = e.target.checked;
+    });
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+    });
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    (function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+  </script>
+</body>
+</html>

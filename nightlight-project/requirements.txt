@@ -1,0 +1,8 @@
+numpy
+scipy
+scikit-image
+Pillow
+trimesh
+fastapi
+uvicorn
+python-multipart
